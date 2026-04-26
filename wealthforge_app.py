@@ -25,7 +25,6 @@ def save_portfolios(portfolios):
 
 if "portfolios" not in st.session_state:
     st.session_state.portfolios = load_portfolios()
-
 if "current_portfolio" not in st.session_state:
     st.session_state.current_portfolio = None
 if "view" not in st.session_state:
@@ -36,7 +35,7 @@ if "current_ticker" not in st.session_state:
 # ====================== SIDEBAR ======================
 with st.sidebar:
     st.title("📈 WealthForge")
-    st.caption("**v3.2** — At your service, my liege")
+    st.caption("**v3.3** — At your service, my liege")
     
     portfolio_names = list(st.session_state.portfolios.keys())
     if portfolio_names:
@@ -47,7 +46,7 @@ with st.sidebar:
     st.divider()
     new_name = st.text_input("New Portfolio Name")
     if st.button("➕ Create Portfolio") and new_name:
-        st.session_state.portfolios[new_name] = {"holdings": {}, "prediction_log": {}}
+        st.session_state.portfolios[new_name] = {"holdings": {}}
         st.session_state.current_portfolio = new_name
         save_portfolios(st.session_state.portfolios)
         st.success(f"Created '{new_name}'")
@@ -61,13 +60,12 @@ with st.sidebar:
 
 # ====================== MAIN APP ======================
 if not st.session_state.current_portfolio:
-    st.title("Welcome to WealthForge v3.2")
+    st.title("Welcome to WealthForge v3.3")
     st.markdown("**Create or select a portfolio on the left, my liege.**")
     st.stop()
 
 st.title(f"📊 {st.session_state.current_portfolio}")
 
-# ====================== PORTFOLIO OVERVIEW ======================
 if st.session_state.view == "home":
     holdings = st.session_state.portfolios[st.session_state.current_portfolio]["holdings"]
     
@@ -93,19 +91,9 @@ if st.session_state.view == "home":
                 "Value": f"${value:,.2f}"
             })
 
-        df = pd.DataFrame(rows)
-        st.dataframe(df, use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+        st.metric("Total Portfolio Value", f"${total_value:,.2f}")
 
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Total Portfolio Value", f"${total_value:,.2f}")
-        
-        # Simple performance summary
-        best = max(rows, key=lambda x: float(x["Change"].replace('%','').replace('+','')))
-        worst = min(rows, key=lambda x: float(x["Change"].replace('%','').replace('+','')))
-        col2.metric("Best Performer Today", f"{best['Ticker']} ({best['Change']})")
-        col3.metric("Worst Performer Today", f"{worst['Ticker']} ({worst['Change']})")
-
-    # Add new holding
     st.subheader("Add Holding")
     c1, c2 = st.columns(2)
     with c1:
@@ -118,11 +106,10 @@ if st.session_state.view == "home":
         st.success(f"Added {new_ticker}")
         st.rerun()
 
-    if st.button("🔎 View Stock Details"):
-        if holdings:
-            st.session_state.view = "stock"
-            st.session_state.current_ticker = st.selectbox("Select Stock", list(holdings.keys()))
-            st.rerun()
+    if st.button("🔎 View Stock Details") and holdings:
+        st.session_state.view = "stock"
+        st.session_state.current_ticker = st.selectbox("Select Stock", list(holdings.keys()))
+        st.rerun()
 
 # ====================== STOCK DETAIL PAGE ======================
 elif st.session_state.view == "stock":
@@ -134,48 +121,58 @@ elif st.session_state.view == "stock":
 
     tf_options = {"1D": "1d", "5D": "5d", "1M": "1mo", "3M": "3mo", "6M": "6mo", "1Y": "1y", "5Y": "5y"}
     timeframe = st.selectbox("Timeframe", list(tf_options.keys()))
-    mode = st.radio("Mode", ["Historical", "Predictive"], horizontal=True)
+    mode = st.radio("Chart Mode", ["Historical", "Predictive"], horizontal=True)
 
     hist = yf.download(ticker, period=tf_options[timeframe], progress=False)
 
-    if mode == "Historical":
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(x=hist.index, y=hist['Close'], line=dict(color="#ffd700", width=3)))
-        fig.update_layout(title=f"{ticker} Historical", template="plotly_dark", height=650)
-        st.plotly_chart(fig, use_container_width=True)
+    if hist.empty:
+        st.error(f"Could not load data for {ticker}. Try a different ticker (e.g. XEQT.TO, AAPL, TSLA).")
     else:
-        # Predictive (same high-quality Monte Carlo as before)
-        returns = hist['Close'].pct_change().dropna()
-        current = float(hist['Close'].iloc[-1])
-        days = 60
-        sims = 4000
-        paths = np.zeros((days, sims))
-        paths[0] = current
-        for t in range(1, days):
-            Z = np.random.standard_normal(sims)
-            mu = returns.mean() * 252
-            sigma = returns.std() * np.sqrt(252)
-            paths[t] = paths[t-1] * np.exp((mu - 0.5*sigma**2)*(1/252) + sigma*np.sqrt(1/252)*Z)
+        if mode == "Historical":
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=hist.index, y=hist['Close'], line=dict(color="#ffd700", width=3)))
+            fig.update_layout(title=f"{ticker} Historical ({timeframe})", template="plotly_dark", height=650)
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            returns = hist['Close'].pct_change().dropna()
+            
+            if len(returns) < 5:
+                st.info("Limited data available. Using default market assumptions for prediction.")
+                mu = 0.08   # 8% expected return
+                sigma = 0.20  # 20% volatility
+            else:
+                mu = returns.mean() * 252
+                sigma = returns.std() * np.sqrt(252)
 
-        fig = go.Figure()
-        dates = pd.date_range(datetime.today(), periods=days, freq='B')
-        p10, p50, p90 = np.percentile(paths, [10,50,90], axis=1)
-        fig.add_trace(go.Scatter(x=dates, y=p10, line=dict(color='red'), name='10th %ile'))
-        fig.add_trace(go.Scatter(x=dates, y=p90, fill='tonexty', line=dict(color='lime'), name='90th %ile'))
-        fig.add_trace(go.Scatter(x=dates, y=p50, line=dict(color='#ffd700', width=4), name='Median'))
-        fig.update_layout(title=f"{ticker} — Predictive Monte Carlo", template="plotly_dark", height=650)
-        st.plotly_chart(fig, use_container_width=True)
+            current = float(hist['Close'].iloc[-1])
+            days = 60
+            sims = 4000
+            paths = np.zeros((days, sims))
+            paths[0] = current
+            for t in range(1, days):
+                Z = np.random.standard_normal(sims)
+                paths[t] = paths[t-1] * np.exp((mu - 0.5*sigma**2)*(1/252) + sigma*np.sqrt(1/252)*Z)
 
-    # Enhanced Ask WealthForge button
+            fig = go.Figure()
+            dates = pd.date_range(datetime.today(), periods=days, freq='B')
+            p10, p50, p90 = np.percentile(paths, [10,50,90], axis=1)
+            fig.add_trace(go.Scatter(x=dates, y=p10, line=dict(color='red'), name='10th %ile'))
+            fig.add_trace(go.Scatter(x=dates, y=p90, fill='tonexty', line=dict(color='lime'), name='90th %ile'))
+            fig.add_trace(go.Scatter(x=dates, y=p50, line=dict(color='#ffd700', width=4), name='Median'))
+            fig.update_layout(title=f"{ticker} — Predictive Monte Carlo", template="plotly_dark", height=650)
+            st.plotly_chart(fig, use_container_width=True)
+
     if st.button("🔥 Deep Analysis by Grok"):
-        prompt = f"""WealthForge, deep analysis on {ticker} right now:
-- Current chart & technicals
-- News and X sentiment
-- Supply/demand factors
+        prompt = f"""WealthForge, give me your complete analysis on {ticker} right now:
+- Technical chart analysis
+- Key levels (support/resistance)
+- News & catalysts
+- X/Twitter sentiment
+- Supply/demand dynamics
 - Probabilistic outlook
-- Any risks or opportunities
-Be thorough and critical, my liege."""
+- Risks and opportunities
+Be thorough and honest, my liege."""
         st.code(prompt, language="text")
-        st.success("✅ Prompt copied — paste it in our chat, my liege.")
+        st.success("✅ Prompt copied — paste in our chat, my liege.")
 
-st.caption("**WealthForge v3.2** • Built for my liege • April 2026")
+st.caption("**WealthForge v3.3** • Built for my liege")
