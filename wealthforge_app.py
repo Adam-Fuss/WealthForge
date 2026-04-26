@@ -1,102 +1,102 @@
 import streamlit as st
 import yfinance as yf
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 import numpy as np
 import pandas as pd
-from datetime import datetime, timedelta
+from datetime import datetime
 
-st.set_page_config(page_title="WealthForge • Adam", layout="wide", page_icon="📈", initial_sidebar_state="expanded")
-
-st.title("📈 WealthForge")
-st.markdown("**Adam’s Personal AI Wealth Engine** — Live prices • Monte Carlo predictions • Calgary, Alberta")
+st.set_page_config(page_title="WealthForge • Adam", layout="wide", page_icon="📈")
+st.title("📈 WealthForge v2.1")
+st.markdown("**Adam’s Personal AI Wealth Engine** — Live Portfolio • Monte Carlo Predictions • Calgary, AB")
 
 with st.sidebar:
     st.header("WealthForge Agent")
     st.caption("Connected to Grok • SuperGrok")
-    if st.button("Ask WealthForge (copy prompt)"):
-        st.code("WealthForge, run full backtest + Monte Carlo on my current portfolio: [paste tickers here]", language="text")
-        st.success("✅ Prompt copied! Paste into our chat for deep analysis.")
+    if st.button("Ask WealthForge (Deep Analysis)"):
+        st.code("WealthForge, run full backtest + Monte Carlo on my portfolio: [paste details here]", language="text")
+        st.success("✅ Prompt copied!")
     st.divider()
-    st.info("**Not financial advice** — For education and simulation only.")
+    st.info("**Educational tool only** — Not financial advice.")
 
-tab1, tab2, tab3 = st.tabs(["Live Ticker Predictor", "Portfolio Builder", "Deep Backtest"])
+# Portfolio Input
+st.subheader("Portfolio Builder")
+st.write("Add tickers and target weights (they will be normalized)")
 
-with tab1:
-    st.subheader("Live Ticker + 5-Year Predictive Graph")
-    ticker = st.text_input("Ticker (e.g. XEQT.TO, AAPL, VTI, SHOP.TO)", value="XEQT.TO").upper().strip()
-    
-    if st.button("Generate Live Predictive Graph", type="primary", use_container_width=True):
-        with st.spinner("Fetching real-time data + running 5,000 Monte Carlo paths..."):
-            data = yf.download(ticker, period="2y", interval="1d")
-            if data.empty:
-                st.error("Ticker not found. Try XEQT.TO or AAPL")
-            else:
-                current_price = float(data['Close'].iloc[-1])
-                returns = data['Close'].pct_change().dropna()
-                mu = returns.mean() * 252
-                sigma = returns.std() * np.sqrt(252)
-                
-                st.metric("Current Price", f"${current_price:,.2f}")
-                
-                # Monte Carlo
-                days = 252 * 5
-                simulations = 5000
-                dt = 1/252
-                paths = np.zeros((days, simulations))
-                paths[0] = current_price
-                for t in range(1, days):
-                    Z = np.random.standard_normal(simulations)
-                    paths[t] = paths[t-1] * np.exp((mu - 0.5 * sigma**2) * dt + sigma * np.sqrt(dt) * Z)
-                
-                fig = go.Figure()
-                median = np.median(paths, axis=1)
-                p10 = np.percentile(paths, 10, axis=1)
-                p90 = np.percentile(paths, 90, axis=1)
-                
-                for i in range(0, simulations, 50):
-                    fig.add_trace(go.Scatter(x=pd.date_range(start=datetime.today(), periods=days, freq='B'), 
-                                           y=paths[:, i], mode='lines', line=dict(color='rgba(0,100,200,0.08)'), showlegend=False))
-                
-                fig.add_trace(go.Scatter(x=pd.date_range(start=datetime.today(), periods=days, freq='B'), y=p10, mode='lines', line=dict(color='red'), name='10th %ile'))
-                fig.add_trace(go.Scatter(x=pd.date_range(start=datetime.today(), periods=days, freq='B'), y=p90, fill='tonexty', mode='lines', line=dict(color='green'), name='90th %ile', fillcolor='rgba(0,200,100,0.3)'))
-                fig.add_trace(go.Scatter(x=pd.date_range(start=datetime.today(), periods=days, freq='B'), y=median, mode='lines', line=dict(color='gold', width=4), name='Median'))
-                
-                fig.update_layout(title=f"{ticker} — 5-Year Monte Carlo Fan Chart", xaxis_title="Time", yaxis_title="Projected Price ($)", height=650, template="plotly_dark")
-                st.plotly_chart(fig, use_container_width=True)
-                
-                final_median = median[-1]
-                prob_double = np.mean(paths[-1] > current_price * 2) * 100
-                st.success(f"**Median 5-Year Value: ${final_median:,.0f}** | Probability of doubling: {prob_double:.0f}%")
+tickers_input = st.text_area("Tickers (one per line, e.g. XEQT.TO)", 
+                             value="XEQT.TO\nVTI\nQQQ\nVCN.TO", height=150)
+weights_input = st.text_area("Target Weights % (one per line, matching tickers)", 
+                             value="60\n25\n10\n5", height=150)
 
-with tab2:
-    st.subheader("Portfolio Builder (Multi-Ticker Monte Carlo)")
-    st.info("Add your holdings below. Weights must sum to 100%.")
-    
-    # Simple portfolio input (expandable)
-    if 'portfolio' not in st.session_state:
-        st.session_state.portfolio = [{"ticker": "XEQT.TO", "weight": 100}]
-    
-    for i, holding in enumerate(st.session_state.portfolio):
-        col1, col2, col3 = st.columns([3, 2, 1])
-        with col1:
-            st.session_state.portfolio[i]["ticker"] = st.text_input(f"Ticker {i+1}", value=holding["ticker"], key=f"t{i}").upper()
-        with col2:
-            st.session_state.portfolio[i]["weight"] = st.number_input(f"Weight %", value=holding["weight"], min_value=0, max_value=100, key=f"w{i}")
-        with col3:
-            if st.button("Remove", key=f"r{i}"):
-                st.session_state.portfolio.pop(i)
-                st.rerun()
-    
-    if st.button("Add another ticker"):
-        st.session_state.portfolio.append({"ticker": "", "weight": 0})
-        st.rerun()
-    
-    if st.button("Run Portfolio Monte Carlo", type="primary", use_container_width=True):
-        st.info("Portfolio-level Monte Carlo coming in v2.1 (tell me if you want it upgraded now). For now, use single-ticker mode above or paste into chat.")
+monthly_contribution = st.number_input("Monthly Contribution (CAD)", value=500, min_value=0, step=100)
 
-with tab3:
-    st.subheader("Deep Backtest Mode")
-    st.write("Paste any portfolio here → copy the generated prompt → send it to me in our chat for full historical backtests + advanced simulations.")
+if st.button("Run Full Portfolio Monte Carlo", type="primary"):
+    with st.spinner("Downloading data + running 5,000 simulations..."):
+        tickers = [t.strip().upper() for t in tickers_input.splitlines() if t.strip()]
+        try:
+            weights = [float(w.strip()) for w in weights_input.splitlines() if w.strip()]
+        except:
+            st.error("Weights must be numbers")
+            st.stop()
 
-st.caption("WealthForge v2.0 • Built live for Adam • Powered by Grok • April 2026")
+        if len(tickers) != len(weights):
+            st.error("Number of tickers and weights must match")
+            st.stop()
+
+        # Fetch data
+        data = yf.download(tickers, period="3y", interval="1d", progress=False)['Close']
+        returns = data.pct_change().dropna()
+        
+        # Portfolio stats
+        port_returns = returns.dot(np.array(weights) / sum(weights))
+        mu = port_returns.mean() * 252
+        sigma = port_returns.std() * np.sqrt(252)
+        current_value = 50000  # Default starting value - you can make this editable later
+
+        st.success(f"Portfolio: {len(tickers)} assets | Expected Return: {mu*100:.1f}% | Volatility: {sigma*100:.1f}%")
+
+        # Monte Carlo
+        days = 252 * 10  # 10 years
+        sims = 5000
+        dt = 1/252
+        paths = np.zeros((days, sims))
+        paths[0] = current_value
+
+        for t in range(1, days):
+            Z = np.random.standard_normal(sims)
+            paths[t] = paths[t-1] * np.exp((mu - 0.5*sigma**2)*dt + sigma*np.sqrt(dt)*Z)
+
+        # Add contributions
+        monthly_steps = int(days / 12)
+        for i in range(1, days):
+            if i % monthly_steps == 0:
+                paths[i:] += monthly_contribution
+
+        # Plot
+        fig = go.Figure()
+        dates = pd.date_range(start=datetime.today(), periods=days, freq='B')
+        
+        # Fan effect
+        for i in range(0, sims, 40):
+            fig.add_trace(go.Scatter(x=dates, y=paths[:,i], mode='lines', 
+                                   line=dict(color='rgba(0,120,220,0.07)'), showlegend=False))
+        
+        p10 = np.percentile(paths, 10, axis=1)
+        p50 = np.median(paths, axis=1)
+        p90 = np.percentile(paths, 90, axis=1)
+        
+        fig.add_trace(go.Scatter(x=dates, y=p10, mode='lines', line=dict(color='red'), name='10th %ile (Bad)'))
+        fig.add_trace(go.Scatter(x=dates, y=p90, fill='tonexty', mode='lines', line=dict(color='lime'), 
+                               name='90th %ile (Great)', fillcolor='rgba(0,255,100,0.25)'))
+        fig.add_trace(go.Scatter(x=dates, y=p50, mode='lines', line=dict(color='gold', width=4), name='Median'))
+        
+        fig.update_layout(title="10-Year Portfolio Monte Carlo (5,000 paths)", 
+                         xaxis_title="Date", yaxis_title="Projected Portfolio Value ($)",
+                         height=700, template="plotly_dark")
+        st.plotly_chart(fig, use_container_width=True)
+
+        final_median = p50[-1]
+        prob_million = (paths[-1] > 1_000_000).mean() * 100
+        st.metric("Median 10-Year Value", f"${final_median:,.0f}")
+        st.success(f"**Probability of reaching $1M**: {prob_million:.1f}%")
+
+st.caption("WealthForge v2.1 • Built live for Adam • Tell me what to add next")
