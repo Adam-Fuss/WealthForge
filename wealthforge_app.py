@@ -35,7 +35,7 @@ if "current_ticker" not in st.session_state:
 # Sidebar
 with st.sidebar:
     st.title("📈 WealthForge")
-    st.caption("v3.2.8 - At your service, my liege")
+    st.caption("v3.2.9 - At your service, my liege")
     
     portfolio_names = list(st.session_state.portfolios.keys())
     if portfolio_names:
@@ -60,7 +60,7 @@ with st.sidebar:
 
 # Main App
 if not st.session_state.current_portfolio:
-    st.title("Welcome to WealthForge v3.2.8")
+    st.title("Welcome to WealthForge v3.2.9")
     st.stop()
 
 st.title(st.session_state.current_portfolio)
@@ -126,7 +126,7 @@ elif st.session_state.view == "stock":
     hist = yf.download(ticker, period=tf_options[timeframe], progress=False)
 
     if hist.empty:
-        st.error(f"Could not fetch data for {ticker}. Please check the ticker symbol or try again later.")
+        st.error(f"Could not fetch data for {ticker}. Please check the ticker symbol or try a more popular one (e.g. XEQT.TO, AAPL, TSLA).")
     else:
         if mode == "Historical":
             fig = go.Figure()
@@ -135,32 +135,45 @@ elif st.session_state.view == "stock":
             st.plotly_chart(fig, use_container_width=True)
         else:
             returns = hist['Close'].pct_change().dropna()
-            if len(returns) < 5:
-                st.warning("Not enough data for predictive chart.")
+            if len(returns) < 3:
+                st.warning("Limited historical data. Using conservative prediction settings.")
+                # Fallback values for very new/low-data tickers
+                mu = 0.10  # 10% annual drift
+                sigma = 0.25  # 25% volatility
             else:
-                current = float(hist['Close'].iloc[-1])
-                days = 60
-                sims = 4000
-                paths = np.zeros((days, sims))
-                paths[0] = current
-                for t in range(1, days):
-                    Z = np.random.standard_normal(sims)
-                    mu = returns.mean() * 252
-                    sigma = returns.std() * np.sqrt(252)
-                    paths[t] = paths[t-1] * np.exp((mu - 0.5*sigma**2)*(1/252) + sigma*np.sqrt(1/252)*Z)
+                mu = returns.mean() * 252
+                sigma = returns.std() * np.sqrt(252)
 
-                fig = go.Figure()
-                dates = pd.date_range(datetime.today(), periods=days, freq='B')
-                p10, p50, p90 = np.percentile(paths, [10,50,90], axis=1)
-                fig.add_trace(go.Scatter(x=dates, y=p10, line=dict(color='red'), name='10th %ile'))
-                fig.add_trace(go.Scatter(x=dates, y=p90, fill='tonexty', line=dict(color='lime'), name='90th %ile'))
-                fig.add_trace(go.Scatter(x=dates, y=p50, line=dict(color='#ffd700', width=4), name='Median'))
-                fig.update_layout(title=f"{ticker} — Predictive Monte Carlo", template="plotly_dark", height=650)
-                st.plotly_chart(fig, use_container_width=True)
+            current = float(hist['Close'].iloc[-1])
+            days = 60
+            sims = 4000
+            paths = np.zeros((days, sims))
+            paths[0] = current
+            for t in range(1, days):
+                Z = np.random.standard_normal(sims)
+                paths[t] = paths[t-1] * np.exp((mu - 0.5*sigma**2)*(1/252) + sigma*np.sqrt(1/252)*Z)
 
-    if st.button("Deep Analysis by Grok"):
-        prompt = f"""WealthForge, deep analysis on {ticker} right now..."""
+            fig = go.Figure()
+            dates = pd.date_range(datetime.today(), periods=days, freq='B')
+            p10, p50, p90 = np.percentile(paths, [10,50,90], axis=1)
+            fig.add_trace(go.Scatter(x=dates, y=p10, line=dict(color='red'), name='10th %ile'))
+            fig.add_trace(go.Scatter(x=dates, y=p90, fill='tonexty', line=dict(color='lime'), name='90th %ile'))
+            fig.add_trace(go.Scatter(x=dates, y=p50, line=dict(color='#ffd700', width=4), name='Median'))
+            fig.update_layout(title=f"{ticker} — Predictive Monte Carlo", template="plotly_dark", height=650)
+            st.plotly_chart(fig, use_container_width=True)
+
+    if st.button("🔥 Deep Analysis by Grok"):
+        prompt = f"""WealthForge, give me your full Grok-level analysis on {ticker} right now:
+• Current technical chart analysis
+• Key support/resistance levels
+• Recent news and catalysts
+• X/Twitter sentiment
+• Supply and demand factors
+• Macro and sector context
+• Probabilistic outlook (short-term and longer-term)
+• Risks and opportunities
+Be thorough, critical, and honest, my liege."""
         st.code(prompt, language="text")
-        st.success("Prompt copied - paste in our chat, my liege.")
+        st.success("✅ Prompt copied! Paste it in our main chat for full Grok analysis.")
 
-st.caption("WealthForge v3.2.8")
+st.caption("WealthForge v3.2.9")
