@@ -36,7 +36,7 @@ if "current_ticker" not in st.session_state:
 # ====================== SIDEBAR ======================
 with st.sidebar:
     st.title("📈 WealthForge")
-    st.caption("**v3.2.1** — At your service, my liege")
+    st.caption("**v3.2.2** — At your service, my liege")
     
     portfolio_names = list(st.session_state.portfolios.keys())
     if portfolio_names:
@@ -61,13 +61,13 @@ with st.sidebar:
 
 # ====================== MAIN APP ======================
 if not st.session_state.current_portfolio:
-    st.title("Welcome to WealthForge v3.2.1")
+    st.title("Welcome to WealthForge v3.2.2")
     st.markdown("**Create or select a portfolio on the left, my liege.**")
     st.stop()
 
 st.title(f"📊 {st.session_state.current_portfolio}")
 
-# Portfolio Overview (same as before)
+# ====================== PORTFOLIO OVERVIEW ======================
 if st.session_state.view == "home":
     holdings = st.session_state.portfolios[st.session_state.current_portfolio]["holdings"]
     
@@ -111,13 +111,12 @@ if st.session_state.view == "home":
         st.success(f"Added {new_ticker}")
         st.rerun()
 
-    if st.button("View Stock Details"):
-        if holdings:
-            st.session_state.view = "stock"
-            st.session_state.current_ticker = st.selectbox("Select Stock", list(holdings.keys()))
-            st.rerun()
+    if st.button("View Stock Details") and holdings:
+        st.session_state.view = "stock"
+        st.session_state.current_ticker = st.selectbox("Select Stock", list(holdings.keys()))
+        st.rerun()
 
-# Stock Detail Page (same as v3.2)
+# ====================== STOCK DETAIL PAGE ======================
 elif st.session_state.view == "stock":
     ticker = st.session_state.current_ticker
     st.title(f"{ticker} — Analysis")
@@ -125,20 +124,21 @@ elif st.session_state.view == "stock":
         st.session_state.view = "home"
         st.rerun()
 
-    # ... (rest of the stock page code remains the same as v3.2)
-
-st.caption("**WealthForge v3.2.1** • Fixed & Stable • At your service, my liege")
-            st.rerun()
-
-# ====================== STOCK DETAIL PAGE ======================
-elif st.session_state.view == "stock":
-    ticker = st.session_state.current_ticker
-    st.title(f"{ticker} — Analysis")
-    if st.button("← Back to Portfolio"):
-        st.session_state.view = "home"
-        st.rerun()
-
     tf_options = {"1D": "1d", "5D": "5d", "1M": "1mo", "3M": "3mo", "6M": "6mo", "1Y": "1y", "5Y": "5y"}
+    timeframe = st.selectbox("Timeframe", list(tf_options.keys()))
+    mode = st.radio("Mode", ["Historical", "Predictive"], horizontal=True)
+
+    hist = yf.download(ticker, period=tf_options[timeframe], progress=False)
+
+    if mode == "Historical":
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=hist.index, y=hist['Close'], line=dict(color="#ffd700", width=3)))
+        fig.update_layout(title=f"{ticker} Historical ({timeframe})", template="plotly_dark", height=650)
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        returns = hist['Close'].pct_change().dropna()
+        current = float(hist['Close'].iloc[-1])
+        days = 60
     timeframe = st.selectbox("Timeframe", list(tf_options.keys()))
     mode = st.radio("Mode", ["Historical", "Predictive"], horizontal=True)
 
