@@ -9,7 +9,7 @@ import os
 
 st.set_page_config(page_title="WealthForge – my liege", page_icon="📈", layout="wide")
 
-# Load/Save Data
+# Data Persistence
 def load_portfolios():
     if os.path.exists("wealthforge_data.json"):
         try:
@@ -35,7 +35,7 @@ if "current_ticker" not in st.session_state:
 # Sidebar
 with st.sidebar:
     st.title("📈 WealthForge")
-    st.caption("v3.2.6 - At your service, my liege")
+    st.caption("v3.2.7 - At your service, my liege")
     
     portfolio_names = list(st.session_state.portfolios.keys())
     if portfolio_names:
@@ -58,9 +58,9 @@ with st.sidebar:
         save_portfolios(st.session_state.portfolios)
         st.rerun()
 
-# Main Screen
+# Main App
 if not st.session_state.current_portfolio:
-    st.title("Welcome to WealthForge v3.2.6")
+    st.title("Welcome to WealthForge v3.2.7")
     st.stop()
 
 st.title(st.session_state.current_portfolio)
@@ -68,7 +68,6 @@ st.title(st.session_state.current_portfolio)
 if st.session_state.view == "home":
     holdings = st.session_state.portfolios[st.session_state.current_portfolio]["holdings"]
 
-    # Portfolio Table
     if holdings:
         tickers = list(holdings.keys())
         data = yf.download(tickers, period="5d", progress=False)['Close']
@@ -94,7 +93,6 @@ if st.session_state.view == "home":
         st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
         st.metric("Total Portfolio Value", f"${total_value:,.2f}")
 
-    # === ADD HOLDING SECTION ===
     st.subheader("Add Holding")
     col1, col2 = st.columns(2)
     with col1:
@@ -103,26 +101,42 @@ if st.session_state.view == "home":
         new_shares = st.number_input("Number of Shares", value=0.0, min_value=0.0, step=0.01)
     
     if st.button("Add to Portfolio") and new_ticker:
-        if new_ticker not in holdings:
-            st.session_state.portfolios[st.session_state.current_portfolio]["holdings"][new_ticker] = new_shares
-            save_portfolios(st.session_state.portfolios)
-            st.success(f"Added {new_ticker}")
-            st.rerun()
-        else:
-            st.warning("Ticker already exists. Edit shares below.")
+        st.session_state.portfolios[st.session_state.current_portfolio]["holdings"][new_ticker] = new_shares
+        save_portfolios(st.session_state.portfolios)
+        st.success(f"Added {new_ticker}")
+        st.rerun()
 
     if st.button("View Stock Details") and holdings:
         st.session_state.view = "stock"
         st.session_state.current_ticker = st.selectbox("Choose a stock", list(holdings.keys()))
         st.rerun()
 
+# ====================== STOCK DETAIL PAGE WITH CHARTS ======================
 elif st.session_state.view == "stock":
-    # Stock detail page (basic for now)
     ticker = st.session_state.current_ticker
-    st.title(f"{ticker} Analysis")
-    if st.button("Back to Portfolio"):
+    st.title(f"{ticker} — Analysis")
+    if st.button("← Back to Portfolio"):
         st.session_state.view = "home"
         st.rerun()
-    st.info("Stock detail page coming in next update.")
 
-st.caption("WealthForge v3.2.6")
+    tf_options = {"1D": "1d", "5D": "5d", "1M": "1mo", "3M": "3mo", "6M": "6mo", "1Y": "1y", "5Y": "5y"}
+    timeframe = st.selectbox("Timeframe", list(tf_options.keys()))
+    mode = st.radio("Chart Mode", ["Historical", "Predictive"], horizontal=True)
+
+    hist = yf.download(ticker, period=tf_options[timeframe], progress=False)
+
+    if mode == "Historical":
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=hist.index, y=hist['Close'], line=dict(color="#ffd700", width=3)))
+        fig.update_layout(title=f"{ticker} Historical ({timeframe})", template="plotly_dark", height=650)
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        # Predictive Monte Carlo
+        returns = hist['Close'].pct_change().dropna()
+        current = float(hist['Close'].iloc[-1])
+        days = 60
+        sims = 4000
+        paths = np.zeros((days, sims))
+        paths[0] = current
+        for t in range(1, days):
+            Z
