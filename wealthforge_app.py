@@ -35,7 +35,7 @@ if "current_ticker" not in st.session_state:
 # Sidebar
 with st.sidebar:
     st.title("📈 WealthForge")
-    st.caption("v3.2.7 - At your service, my liege")
+    st.caption("v3.2.8 - At your service, my liege")
     
     portfolio_names = list(st.session_state.portfolios.keys())
     if portfolio_names:
@@ -60,7 +60,7 @@ with st.sidebar:
 
 # Main App
 if not st.session_state.current_portfolio:
-    st.title("Welcome to WealthForge v3.2.7")
+    st.title("Welcome to WealthForge v3.2.8")
     st.stop()
 
 st.title(st.session_state.current_portfolio)
@@ -111,7 +111,7 @@ if st.session_state.view == "home":
         st.session_state.current_ticker = st.selectbox("Choose a stock", list(holdings.keys()))
         st.rerun()
 
-# ====================== STOCK DETAIL PAGE WITH CHARTS ======================
+# ====================== STOCK DETAIL PAGE ======================
 elif st.session_state.view == "stock":
     ticker = st.session_state.current_ticker
     st.title(f"{ticker} — Analysis")
@@ -125,18 +125,42 @@ elif st.session_state.view == "stock":
 
     hist = yf.download(ticker, period=tf_options[timeframe], progress=False)
 
-    if mode == "Historical":
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(x=hist.index, y=hist['Close'], line=dict(color="#ffd700", width=3)))
-        fig.update_layout(title=f"{ticker} Historical ({timeframe})", template="plotly_dark", height=650)
-        st.plotly_chart(fig, use_container_width=True)
+    if hist.empty:
+        st.error(f"Could not fetch data for {ticker}. Please check the ticker symbol or try again later.")
     else:
-        # Predictive Monte Carlo
-        returns = hist['Close'].pct_change().dropna()
-        current = float(hist['Close'].iloc[-1])
-        days = 60
-        sims = 4000
-        paths = np.zeros((days, sims))
-        paths[0] = current
-        for t in range(1, days):
-            Z
+        if mode == "Historical":
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=hist.index, y=hist['Close'], line=dict(color="#ffd700", width=3)))
+            fig.update_layout(title=f"{ticker} Historical ({timeframe})", template="plotly_dark", height=650)
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            returns = hist['Close'].pct_change().dropna()
+            if len(returns) < 5:
+                st.warning("Not enough data for predictive chart.")
+            else:
+                current = float(hist['Close'].iloc[-1])
+                days = 60
+                sims = 4000
+                paths = np.zeros((days, sims))
+                paths[0] = current
+                for t in range(1, days):
+                    Z = np.random.standard_normal(sims)
+                    mu = returns.mean() * 252
+                    sigma = returns.std() * np.sqrt(252)
+                    paths[t] = paths[t-1] * np.exp((mu - 0.5*sigma**2)*(1/252) + sigma*np.sqrt(1/252)*Z)
+
+                fig = go.Figure()
+                dates = pd.date_range(datetime.today(), periods=days, freq='B')
+                p10, p50, p90 = np.percentile(paths, [10,50,90], axis=1)
+                fig.add_trace(go.Scatter(x=dates, y=p10, line=dict(color='red'), name='10th %ile'))
+                fig.add_trace(go.Scatter(x=dates, y=p90, fill='tonexty', line=dict(color='lime'), name='90th %ile'))
+                fig.add_trace(go.Scatter(x=dates, y=p50, line=dict(color='#ffd700', width=4), name='Median'))
+                fig.update_layout(title=f"{ticker} — Predictive Monte Carlo", template="plotly_dark", height=650)
+                st.plotly_chart(fig, use_container_width=True)
+
+    if st.button("Deep Analysis by Grok"):
+        prompt = f"""WealthForge, deep analysis on {ticker} right now..."""
+        st.code(prompt, language="text")
+        st.success("Prompt copied - paste in our chat, my liege.")
+
+st.caption("WealthForge v3.2.8")
