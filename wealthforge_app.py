@@ -8,9 +8,10 @@ from datetime import datetime
 # ================== CUSTOM APP CONFIG FOR PHONE ==================
 st.set_page_config(
     page_title="WealthForge – Adam",
-    page_icon="📈",           # This becomes your app icon on home screen
+    page_icon="📈",        # fallback
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="expanded"
+)
     menu_items={
         'Get Help': 'https://chat.x.ai',
         'Report a bug': None,
