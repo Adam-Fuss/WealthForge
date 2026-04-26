@@ -9,7 +9,7 @@ import os
 
 st.set_page_config(page_title="WealthForge – my liege", page_icon="📈", layout="wide")
 
-# ====================== DATA PERSISTENCE ======================
+# Data Persistence
 def load_portfolios():
     if os.path.exists("wealthforge_data.json"):
         try:
@@ -32,10 +32,10 @@ if "view" not in st.session_state:
 if "current_ticker" not in st.session_state:
     st.session_state.current_ticker = None
 
-# ====================== SIDEBAR ======================
+# Sidebar
 with st.sidebar:
     st.title("📈 WealthForge")
-    st.caption("**v3.3** — At your service, my liege")
+    st.caption("**v3.4** — At your service, my liege")
     
     portfolio_names = list(st.session_state.portfolios.keys())
     if portfolio_names:
@@ -58,10 +58,9 @@ with st.sidebar:
         save_portfolios(st.session_state.portfolios)
         st.rerun()
 
-# ====================== MAIN APP ======================
+# Main App
 if not st.session_state.current_portfolio:
-    st.title("Welcome to WealthForge v3.3")
-    st.markdown("**Create or select a portfolio on the left, my liege.**")
+    st.title("Welcome to WealthForge v3.4")
     st.stop()
 
 st.title(f"📊 {st.session_state.current_portfolio}")
@@ -111,7 +110,7 @@ if st.session_state.view == "home":
         st.session_state.current_ticker = st.selectbox("Select Stock", list(holdings.keys()))
         st.rerun()
 
-# ====================== STOCK DETAIL PAGE ======================
+# ====================== STOCK DETAIL PAGE WITH GRAPHS ======================
 elif st.session_state.view == "stock":
     ticker = st.session_state.current_ticker
     st.title(f"{ticker} — Analysis")
@@ -126,20 +125,28 @@ elif st.session_state.view == "stock":
     hist = yf.download(ticker, period=tf_options[timeframe], progress=False)
 
     if hist.empty:
-        st.error(f"Could not load data for {ticker}. Try a different ticker (e.g. XEQT.TO, AAPL, TSLA).")
+        st.error(f"Could not fetch data for {ticker}. Please try a major ticker like XEQT.TO, AAPL, or TSLA.")
     else:
         if mode == "Historical":
+            # Standard professional stock graph (candlestick)
             fig = go.Figure()
-            fig.add_trace(go.Scatter(x=hist.index, y=hist['Close'], line=dict(color="#ffd700", width=3)))
+            fig.add_trace(go.Candlestick(
+                x=hist.index,
+                open=hist['Open'],
+                high=hist['High'],
+                low=hist['Low'],
+                close=hist['Close'],
+                increasing_line_color='#00ff88',
+                decreasing_line_color='#ff4444'
+            ))
             fig.update_layout(title=f"{ticker} Historical ({timeframe})", template="plotly_dark", height=650)
             st.plotly_chart(fig, use_container_width=True)
         else:
+            # Predictive Monte Carlo with robust fallback
             returns = hist['Close'].pct_change().dropna()
-            
             if len(returns) < 5:
-                st.info("Limited data available. Using default market assumptions for prediction.")
-                mu = 0.08   # 8% expected return
-                sigma = 0.20  # 20% volatility
+                mu = 0.08
+                sigma = 0.22
             else:
                 mu = returns.mean() * 252
                 sigma = returns.std() * np.sqrt(252)
@@ -163,16 +170,14 @@ elif st.session_state.view == "stock":
             st.plotly_chart(fig, use_container_width=True)
 
     if st.button("🔥 Deep Analysis by Grok"):
-        prompt = f"""WealthForge, give me your complete analysis on {ticker} right now:
-- Technical chart analysis
-- Key levels (support/resistance)
-- News & catalysts
-- X/Twitter sentiment
-- Supply/demand dynamics
+        prompt = f"""WealthForge, deep analysis on {ticker} right now:
+- Current chart & technicals
+- News and X sentiment
+- Supply/demand factors
 - Probabilistic outlook
 - Risks and opportunities
-Be thorough and honest, my liege."""
+Be thorough and critical, my liege."""
         st.code(prompt, language="text")
-        st.success("✅ Prompt copied — paste in our chat, my liege.")
+        st.success("✅ Prompt copied — paste it in our chat, my liege.")
 
-st.caption("**WealthForge v3.3** • Built for my liege")
+st.caption("**WealthForge v3.4** • Graphs fixed")
